@@ -167,7 +167,7 @@ impl Signal {
     /// This function is equivalent to `<Signal as AsRef<str>>::as_ref()`,
     /// with difference that returned string is `'static`
     /// and not bound to `self`'s lifetime.
-    pub const fn as_str(self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             Signal::SIGHUP => "SIGHUP",
             Signal::SIGINT => "SIGINT",

@@ -39,7 +39,7 @@ task:
     image: freebsd-12-2-release-amd64
   setup_script:
     - fetch https://sh.rustup.rs -o rustup.sh
-    - sh rustup.sh -y --profile=minimal --default-toolchain $TOOLCHAIN
+    - sh rustup.sh -y --profile=minimal --default-toolchain 1.41.0
     - . $HOME/.cargo/env
     - rustup target add i686-unknown-freebsd
     - rustup component add --toolchain $TOOLCHAIN clippy
@@ -57,11 +57,32 @@ task:
     - name: OSX x86_64
       env:
         TARGET: x86_64-apple-darwin
+<<<<<<< HEAD
+=======
+    - name: OSX i686
+      env:
+        TARGET: i686-apple-darwin
+        DISABLE_TESTS: 1
+    - name: iOS
+      env:
+        # To save VM startup time, test all iOS targets in a single task.
+        # The startup and scheduling time was very significant for Travis, but
+        # not known for Cirrus.
+        TARGET: "aarch64-apple-ios;armv7-apple-ios;armv7s-apple-ios;i386-apple-ios;x86_64-apple-ios"
+        DISABLE_TESTS: 1
+>>>>>>> parent of 5ed5bb6 (Merge pull request #1492 from asomers/bitflags_1.3.1)
   osx_instance:
     image: catalina-xcode
   setup_script:
     - curl --proto '=https' --tlsv1.2 -sSf -o rustup.sh https://sh.rustup.rs
+<<<<<<< HEAD
     - sh rustup.sh -y --profile=minimal --default-toolchain $TOOLCHAIN
+=======
+    - sh rustup.sh -y --profile=minimal --default-toolchain 1.41.0
+    - . $HOME/.cargo/env
+    - bash ci/install.sh
+  script:
+>>>>>>> parent of 5ed5bb6 (Merge pull request #1492 from asomers/bitflags_1.3.1)
     - . $HOME/.cargo/env
     - rustup component add --toolchain $TOOLCHAIN clippy
   << : *TEST
@@ -113,7 +134,11 @@ task:
   setup_script:
     - mkdir /tmp/home
     - curl --proto '=https' --tlsv1.2 -sSf -o rustup.sh https://sh.rustup.rs
+<<<<<<< HEAD
     - sh rustup.sh -y --profile=minimal --default-toolchain $TOOLCHAIN
+=======
+    - sh rustup.sh -y --profile=minimal --default-toolchain 1.41.0
+>>>>>>> parent of 5ed5bb6 (Merge pull request #1492 from asomers/bitflags_1.3.1)
     - . $HOME/.cargo/env
     - cargo install cross
   << : *TEST
@@ -139,11 +164,21 @@ task:
         image: rust:1.46
       env:
         TARGET: x86_64-unknown-linux-gnu
+<<<<<<< HEAD
+=======
+        TOOLCHAIN: 1.41.0
+>>>>>>> parent of 5ed5bb6 (Merge pull request #1492 from asomers/bitflags_1.3.1)
     - name: Linux x86_64 musl
       container:
         image: rust:1.46
       env:
         TARGET: x86_64-unknown-linux-musl
+<<<<<<< HEAD
+=======
+        TOOLCHAIN: 1.41.0
+  container:
+    image: rust:1.41
+>>>>>>> parent of 5ed5bb6 (Merge pull request #1492 from asomers/bitflags_1.3.1)
   setup_script:
     - rustup target add $TARGET
     - rustup component add clippy
@@ -221,11 +256,32 @@ task:
         TARGET: x86_64-unknown-netbsd
     - name: Redox x86_64
       env:
+<<<<<<< HEAD
         TARGET: x86_64-unknown-redox
         # Redox requires a nightly compiler.
         # If stuff breaks, change nightly to the date in the toolchain_*
         # directory at https://static.redox-os.org
         TOOLCHAIN: nightly-2020-08-04
+=======
+        TARGET: x86_64-fuchsia
+  container:
+    image: rust:1.41
+  setup_script:
+    - rustup target add $TARGET
+  script:
+    - cargo +$TOOLCHAIN check --target $TARGET
+    - cargo +$TOOLCHAIN check --target $TARGET --release
+    - cargo +$TOOLCHAIN check --all-targets --target $TARGET
+  before_cache_script: rm -rf $CARGO_HOME/registry/index
+
+# illumos toolchain isn't available via rustup until 1.50
+task:
+  name: illumos
+  env:
+    TARGET: x86_64-unknown-illumos
+  container:
+    image: rust:1.50
+>>>>>>> parent of 5ed5bb6 (Merge pull request #1492 from asomers/bitflags_1.3.1)
   setup_script:
     - rustup target add $TARGET
     - rustup toolchain install $TOOLCHAIN --profile minimal --target $TARGET

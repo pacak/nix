@@ -94,7 +94,7 @@ impl Errno {
         desc(self)
     }
 
-    pub const fn from_i32(err: i32) -> Errno {
+    pub fn from_i32(err: i32) -> Errno {
         from_i32(err)
     }
 
@@ -930,7 +930,7 @@ mod consts {
         pub const ENOTSUP:     Errno = Errno::EOPNOTSUPP;
     }
 
-    pub const fn from_i32(e: i32) -> Errno {
+    pub fn from_i32(e: i32) -> Errno {
         use self::Errno::*;
 
         match e {
@@ -1209,7 +1209,7 @@ mod consts {
         pub const EDEADLOCK:   Errno = Errno::EDEADLK;
     }
 
-    pub const fn from_i32(e: i32) -> Errno {
+    pub fn from_i32(e: i32) -> Errno {
         use self::Errno::*;
 
         match e {
@@ -1457,7 +1457,7 @@ mod consts {
         pub const EOPNOTSUPP:  Errno = Errno::ENOTSUP;
     }
 
-    pub const fn from_i32(e: i32) -> Errno {
+    pub fn from_i32(e: i32) -> Errno {
         use self::Errno::*;
 
         match e {
@@ -1694,7 +1694,7 @@ mod consts {
         pub const EOPNOTSUPP:  Errno = Errno::ENOTSUP;
     }
 
-    pub const fn from_i32(e: i32) -> Errno {
+    pub fn from_i32(e: i32) -> Errno {
         use self::Errno::*;
 
         match e {
@@ -1918,7 +1918,7 @@ mod consts {
         pub const EWOULDBLOCK: Errno = Errno::EAGAIN;
     }
 
-    pub const fn from_i32(e: i32) -> Errno {
+    pub fn from_i32(e: i32) -> Errno {
         use self::Errno::*;
 
         match e {
@@ -2143,7 +2143,7 @@ mod consts {
         pub const EWOULDBLOCK: Errno = Errno::EAGAIN;
     }
 
-    pub const fn from_i32(e: i32) -> Errno {
+    pub fn from_i32(e: i32) -> Errno {
         use self::Errno::*;
 
         match e {
@@ -2352,7 +2352,7 @@ mod consts {
         pub const EWOULDBLOCK: Errno = Errno::EAGAIN;
     }
 
-    pub const fn from_i32(e: i32) -> Errno {
+    pub fn from_i32(e: i32) -> Errno {
         use self::Errno::*;
 
         match e {
@@ -2592,7 +2592,7 @@ mod consts {
         pub const EWOULDBLOCK: Errno = Errno::EAGAIN;
     }
 
-    pub const fn from_i32(e: i32) -> Errno {
+    pub fn from_i32(e: i32) -> Errno {
         use self::Errno::*;
 
         match e {
