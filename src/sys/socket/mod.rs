@@ -591,6 +591,14 @@ pub enum ControlMessageOwned {
     /// # }
     /// ```
     ScmTimestamp(TimeVal),
+    /// A set of nanosecond resolution timestamps
+    ///
+    /// [Further reading](https://www.kernel.org/doc/html/latest/networking/timestamping.html)
+    #[cfg(all(target_os = "linux"))]
+    ScmTimestampsns(Timestamping),
+    #[cfg(any(
+        target_os = "linux",
+    ))]
     /// Nanoseconds resolution timestamp
     ///
     /// [Further reading](https://www.kernel.org/doc/html/latest/networking/timestamping.html)
@@ -666,6 +674,13 @@ pub enum ControlMessageOwned {
     Unknown(UnknownCmsg),
 }
 
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct Timestamping {
+    pub system: TimeSpec,
+    pub hw_trans: TimeSpec,
+    pub hw_raw: TimeSpec,
+}
+
 impl ControlMessageOwned {
     /// Decodes a `ControlMessageOwned` from raw bytes.
     ///
@@ -709,6 +724,19 @@ impl ControlMessageOwned {
             (libc::SOL_SOCKET, libc::SCM_TIMESTAMPNS) => {
                 let ts: libc::timespec = ptr::read_unaligned(p as *const _);
                 ControlMessageOwned::ScmTimestampns(TimeSpec::from(ts))
+            }
+            #[cfg(all(target_os = "linux"))]
+            (libc::SOL_SOCKET, libc::SCM_TIMESTAMPING) => {
+                let ts: libc::timespec = ptr::read_unaligned(p as *const _);
+                let system = TimeSpec::from(ts);
+                let tsp = (p as *const libc::timespec).add(1);
+                let ts: libc::timespec = ptr::read_unaligned(tsp as *const _);
+                let hw_trans = TimeSpec::from(ts);
+                let tsp = (p as *const libc::timespec).add(2);
+                let ts: libc::timespec = ptr::read_unaligned(tsp as *const _);
+                let hw_raw = TimeSpec::from(ts);
+                let timestamping = Timestamping { system, hw_trans, hw_raw };
+                ControlMessageOwned::ScmTimestampsns(timestamping)
             }
             #[cfg(any(
                 target_os = "android",

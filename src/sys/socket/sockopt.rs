@@ -16,7 +16,7 @@ use std::os::unix::ffi::OsStrExt;
 
 // Constants
 // TCP_CA_NAME_MAX isn't defined in user space include files
-#[cfg(any(target_os = "freebsd", target_os = "linux"))] 
+#[cfg(any(target_os = "freebsd", target_os = "linux"))]
 const TCP_CA_NAME_MAX: usize = 16;
 
 /// Helper for implementing `SetSockOpt` for a given socket option. See
@@ -432,7 +432,18 @@ sockopt_impl!(
     #[allow(missing_docs)]
     // Not documented by Linux!
     Ip6tOriginalDst, GetOnly, libc::SOL_IPV6, libc::IP6T_SO_ORIGINAL_DST, libc::sockaddr_in6);
-sockopt_impl!( 
+sockopt_impl!(
+    /// Specifies exact type of timestamping information collected by the kernel
+    /// [Further reading](https://www.kernel.org/doc/html/latest/networking/timestamping.html)
+    /// Takes a bitwise `or` of libc timestamping options:
+    /// - [SOF_TIMESTAMPING_TX_HARDWARE][::libc::SOF_TIMESTAMPING_TX_HARDWARE]:
+    /// - [SOF_TIMESTAMPING_TX_SOFTWARE][::libc::SOF_TIMESTAMPING_TX_SOFTWARE]:
+    /// - [SOF_TIMESTAMPING_RX_HARDWARE][::libc::SOF_TIMESTAMPING_RX_HARDWARE]:
+    /// - [SOF_TIMESTAMPING_RX_SOFTWARE][::libc::SOF_TIMESTAMPING_RX_SOFTWARE]:
+    /// - [SOF_TIMESTAMPING_RAW_HARDWARE][::libc::SOF_TIMESTAMPING_RAW_HARDWARE]:
+    /// - [SOF_TIMESTAMPING_SOFTWARE][::libc::SOF_TIMESTAMPING_SOFTWARE]
+    Timestamping, Both, libc::SOL_SOCKET, libc::SO_TIMESTAMPING, u32);
+sockopt_impl!(
     /// Enable or disable the receiving of the `SO_TIMESTAMP` control message.
     ReceiveTimestamp, Both, libc::SOL_SOCKET, libc::SO_TIMESTAMP, bool);
 #[cfg(all(target_os = "linux"))]
@@ -463,7 +474,7 @@ sockopt_impl!(
     /// Enable or disable the receiving of the `SCM_CREDENTIALS` control
     /// message.
     PassCred, Both, libc::SOL_SOCKET, libc::SO_PASSCRED, bool);
-#[cfg(any(target_os = "freebsd", target_os = "linux"))] 
+#[cfg(any(target_os = "freebsd", target_os = "linux"))]
 sockopt_impl!(
     /// This option allows the caller to set the TCP congestion control
     /// algorithm to be used,  on a per-socket basis.
