@@ -727,13 +727,15 @@ impl ControlMessageOwned {
             }
             #[cfg(all(target_os = "linux"))]
             (libc::SOL_SOCKET, libc::SCM_TIMESTAMPING) => {
-                let ts: libc::timespec = ptr::read_unaligned(p as *const _);
+                let tp = p as *const libc::timespec;
+                println!("pointers: {:?}", [tp, tp.add(1), tp.add(2)]);
+                let bytes = slice::from_raw_parts(p, 32);
+                println!("payload: {:?}", bytes);
+                let ts: libc::timespec = ptr::read_unaligned(tp);
                 let system = TimeSpec::from(ts);
-                let tsp = (p as *const libc::timespec).add(1);
-                let ts: libc::timespec = ptr::read_unaligned(tsp as *const _);
+                let ts: libc::timespec = ptr::read_unaligned(tp.add(1));
                 let hw_trans = TimeSpec::from(ts);
-                let tsp = (p as *const libc::timespec).add(2);
-                let ts: libc::timespec = ptr::read_unaligned(tsp as *const _);
+                let ts: libc::timespec = ptr::read_unaligned(tp.add(2));
                 let hw_raw = TimeSpec::from(ts);
                 let timestamping = Timestamping { system, hw_trans, hw_raw };
                 ControlMessageOwned::ScmTimestampsns(timestamping)
