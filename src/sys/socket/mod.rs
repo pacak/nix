@@ -729,8 +729,8 @@ impl ControlMessageOwned {
             (libc::SOL_SOCKET, libc::SCM_TIMESTAMPING) => {
                 let tp = p as *const libc::timespec;
                 println!("pointers: {:?}", [tp, tp.add(1), tp.add(2)]);
-                let bytes = slice::from_raw_parts(p, 32);
-                println!("payload: {:?}", bytes);
+                let bytes = slice::from_raw_parts(p, 16 * 3);
+                println!("payload: {:x?}", bytes);
                 let ts: libc::timespec = ptr::read_unaligned(tp);
                 let system = TimeSpec::from(ts);
                 let ts: libc::timespec = ptr::read_unaligned(tp.add(1));
