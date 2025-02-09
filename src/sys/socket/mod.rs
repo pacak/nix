@@ -1792,7 +1792,7 @@ pub fn sendmmsg<'a, XS, AS, C, I, S>(
     // shared across all the messages
     cmsgs: C,
     flags: MsgFlags
-) -> crate::Result<MultiResults<'a, S>>
+) -> crate::Result<MultiResults<'a, 'a, S>>
     where
         XS: IntoIterator<Item = &'a I>,
         AS: AsRef<[Option<S>]>,
@@ -1847,7 +1847,8 @@ pub fn sendmmsg<'a, XS, AS, C, I, S>(
     Ok(MultiResults {
         rmm: data,
         current_index: 0,
-        received: sent
+        received: sent,
+        pd: std::marker::PhantomData,
     })
 
 }
@@ -1935,16 +1936,16 @@ impl<S> MultiHeaders<S> {
 // always produce the desired results - see https://github.com/nix-rust/nix/pull/1744 for more
 // details
 #[cfg(any(linux_android, target_os = "freebsd", target_os = "netbsd"))]
-pub fn recvmmsg<'a, XS, S, I>(
+pub fn recvmmsg<'hdr, 'iter, 'data, XS, S, I>(
     fd: RawFd,
-    data: &'a mut MultiHeaders<S>,
+    data: &'hdr mut MultiHeaders<S>,
     slices: XS,
     flags: MsgFlags,
     mut timeout: Option<crate::sys::time::TimeSpec>,
-) -> crate::Result<MultiResults<'a, S>>
+) -> crate::Result<MultiResults<'hdr, 'iter, S>>
 where
-    XS: IntoIterator<Item = &'a mut I>,
-    I: AsMut<[IoSliceMut<'a>]> + 'a,
+    XS: IntoIterator<Item = &'iter mut I>,
+    I: AsMut<[IoSliceMut<'data>]> + 'iter,
 {
     let mut count = 0;
     for (i, (slice, mmsghdr)) in slices.into_iter().zip(data.items.iter_mut()).enumerate() {
@@ -1979,25 +1980,28 @@ where
         rmm: data,
         current_index: 0,
         received,
+        pd: std::marker::PhantomData,
     })
 }
 
 /// Iterator over results of [`recvmmsg`]/[`sendmmsg`]
 #[cfg(any(linux_android, target_os = "freebsd", target_os = "netbsd"))]
 #[derive(Debug)]
-pub struct MultiResults<'a, S> {
+pub struct MultiResults<'a, 's, S> {
     // preallocated structures
     rmm: &'a MultiHeaders<S>,
     current_index: usize,
     received: usize,
+    // iovs
+    pd: std::marker::PhantomData<&'s ()>,
 }
 
 #[cfg(any(linux_android, target_os = "freebsd", target_os = "netbsd"))]
-impl<'a, S> Iterator for MultiResults<'a, S>
+impl<'a, 's, S> Iterator for MultiResults<'a, 's, S>
 where
     S: Copy + SockaddrLike,
 {
-    type Item = RecvMsg<'a, 'a, S>;
+    type Item = RecvMsg<'a, 's, S>;
 
     // The cast is not unnecessary on all platforms.
     #[allow(clippy::unnecessary_cast)]
