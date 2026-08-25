@@ -259,8 +259,11 @@ impl SockProtocol {
     #[cfg(linux_android)]
     #[allow(non_upper_case_globals)]
     #[cfg(target_endian = "little")]
-    pub const EthIp: SockProtocol = unsafe { std::mem::transmute::<i32, SockProtocol>((libc::ETH_P_IP as u16).to_be() as i32) };
-
+    pub const EthIp: SockProtocol = unsafe {
+        std::mem::transmute::<i32, SockProtocol>(
+            (libc::ETH_P_IP as u16).to_be() as i32,
+        )
+    };
 }
 #[cfg(linux_android)]
 libc_bitflags! {
@@ -2359,7 +2362,13 @@ pub fn bind(fd: RawFd, addr: &dyn SockaddrLike) -> Result<()> {
 ///
 /// [Further reading](https://pubs.opengroup.org/onlinepubs/9699919799/functions/accept.html)
 pub fn accept<Fd: AsFd>(sockfd: Fd) -> Result<OwnedFd> {
-    let res = unsafe { libc::accept(sockfd.as_fd().as_raw_fd(), ptr::null_mut(), ptr::null_mut()) };
+    let res = unsafe {
+        libc::accept(
+            sockfd.as_fd().as_raw_fd(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+        )
+    };
 
     Errno::result(res).map(|fd| unsafe { OwnedFd::from_raw_fd(fd) })
 }
@@ -2385,7 +2394,12 @@ pub fn accept<Fd: AsFd>(sockfd: Fd) -> Result<OwnedFd> {
 ))]
 pub fn accept4<Fd: AsFd>(sockfd: Fd, flags: SockFlag) -> Result<OwnedFd> {
     let res = unsafe {
-        libc::accept4(sockfd.as_fd().as_raw_fd(), ptr::null_mut(), ptr::null_mut(), flags.bits())
+        libc::accept4(
+            sockfd.as_fd().as_raw_fd(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+            flags.bits(),
+        )
     };
 
     Errno::result(res).map(|fd| unsafe { OwnedFd::from_raw_fd(fd) })
