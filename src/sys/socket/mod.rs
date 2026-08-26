@@ -1803,6 +1803,12 @@ pub fn sendmmsg<'a, XS, AS, C, I, S>(
 
     let mut count = 0;
 
+    // `msg_controllen` is an in-out parameter of `sendmsg(2)` too, and a
+    // preceding `recvmmsg` on the same headers shrinks it to the number of
+    // bytes the kernel actually wrote there. Restore the capacity, or
+    // `CMSG_FIRSTHDR`/`CMSG_NXTHDR` below would encode the control messages
+    // into what is left of the buffer, and panic if nothing is left at all.
+    let msg_controllen = data.msg_controllen;
 
     for (i, ((slice, addr), mmsghdr)) in slices.into_iter().zip(addrs.as_ref()).zip(data.items.iter_mut() ).enumerate() {
         let p = &mut mmsghdr.msg_hdr;
@@ -1811,6 +1817,7 @@ pub fn sendmmsg<'a, XS, AS, C, I, S>(
 
         p.msg_namelen = addr.as_ref().map_or(0, S::len);
         p.msg_name = addr.as_ref().map_or(ptr::null(), S::as_ptr).cast_mut().cast();
+        p.msg_controllen = msg_controllen as _;
 
         // Encode each cmsg.  This must happen after initializing the header because
         // CMSG_NEXT_HDR and friends read the msg_control and msg_controllen fields.
@@ -1865,6 +1872,9 @@ pub struct MultiHeaders<S> {
     // and we retain pointers to them inside items array
     _cmsg_buffers: Option<Box<[u8]>>,
     msg_controllen: usize,
+    // the capacity of every address buffer, needed to restore `msg_namelen`
+    // before reusing the headers in `recvmmsg`
+    msg_namelen: libc::socklen_t,
 }
 
 #[cfg(any(linux_android, target_os = "freebsd", target_os = "netbsd"))]
@@ -1908,6 +1918,7 @@ impl<S> MultiHeaders<S> {
             addresses,
             _cmsg_buffers: cmsg_buffers,
             msg_controllen,
+            msg_namelen: S::size(),
         }
     }
 }
@@ -1947,11 +1958,22 @@ where
     XS: IntoIterator<Item = &'iovs mut I>,
     I: AsMut<[IoSliceMut<'data>]> + 'iovs,
 {
+    // `msg_namelen` and `msg_controllen` are in-out parameters of `recvmsg(2)`:
+    // going in they are the capacity of the buffers, coming out they are the
+    // number of bytes the kernel actually wrote there. Restore the capacities,
+    // or a slot that once received a datagram with a short address or without
+    // any control message would be stuck with the shrunken value for good, and
+    // would silently drop what a later datagram carries.
+    let (msg_namelen, msg_controllen) = (data.msg_namelen, data.msg_controllen);
+
     let mut count = 0;
     for (i, (slice, mmsghdr)) in slices.into_iter().zip(data.items.iter_mut()).enumerate() {
         let p = &mut mmsghdr.msg_hdr;
         p.msg_iov = slice.as_mut().as_mut_ptr().cast();
         p.msg_iovlen = slice.as_mut().len() as _;
+        p.msg_namelen = msg_namelen;
+        p.msg_controllen = msg_controllen as _;
+        p.msg_flags = 0;
 
         // Doing an unchecked addition is alright here, as the only way to obtain an instance of `MultiHeaders`
         // is through the `preallocate` function, which takes an `usize` as an argument to define its size,

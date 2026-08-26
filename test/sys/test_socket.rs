@@ -2510,6 +2510,207 @@ fn test_recvmmsg_timestampns() {
     assert!(rduration <= time1.duration_since(UNIX_EPOCH).unwrap());
 }
 
+// A `MultiHeaders` that has already received a datagram without any control
+// message must still be able to report one on the next receive: the kernel
+// shrinks `msg_controllen` to the length it used, and `recvmmsg` has to restore
+// the capacity before reusing the header.
+#[cfg_attr(qemu, ignore)]
+#[cfg(target_os = "linux")]
+#[test]
+fn test_recvmmsg_cmsgs_after_reuse() {
+    use nix::sys::socket::*;
+    use nix::sys::time::*;
+    use std::io::{IoSlice, IoSliceMut};
+
+    let message = "Ohayō!".as_bytes();
+    let in_socket = socket(
+        AddressFamily::Inet,
+        SockType::Datagram,
+        SockFlag::empty(),
+        None,
+    )
+    .unwrap();
+    let localhost = SockaddrIn::from_str("127.0.0.1:0").unwrap();
+    bind(in_socket.as_raw_fd(), &localhost).unwrap();
+    let address: SockaddrIn = getsockname(in_socket.as_raw_fd()).unwrap();
+
+    let flags = MsgFlags::empty();
+    let send = || {
+        let iov = [IoSlice::new(message)];
+        let sent =
+            sendmsg(in_socket.as_raw_fd(), &iov, &[], flags, Some(&address))
+                .unwrap();
+        assert_eq!(message.len(), sent);
+    };
+
+    let mut buffer = vec![0u8; message.len()];
+    let mut data =
+        MultiHeaders::<()>::preallocate(1, Some(nix::cmsg_space!(TimeSpec)));
+
+    // The buffers are borrowed for as long as the results live, so each receive
+    // has to build its own `iov` in its own scope in order to reuse `data`.
+
+    // The first datagram carries no control message, so the kernel reports a
+    // used control length of zero.
+    send();
+    {
+        let mut iov = [[IoSliceMut::new(&mut buffer)]];
+        let received: Vec<RecvMsg<()>> = recvmmsg(
+            in_socket.as_raw_fd(),
+            &mut data,
+            iov.iter_mut(),
+            flags,
+            None,
+        )
+        .unwrap()
+        .collect();
+        assert_eq!(received.len(), 1);
+        assert!(received[0].cmsgs().unwrap().next().is_none());
+    }
+
+    // The second one does, and reusing the same headers must not lose it.
+    setsockopt(&in_socket, sockopt::ReceiveTimestampns, &true).unwrap();
+    send();
+    {
+        let mut iov = [[IoSliceMut::new(&mut buffer)]];
+        let received: Vec<RecvMsg<()>> = recvmmsg(
+            in_socket.as_raw_fd(),
+            &mut data,
+            iov.iter_mut(),
+            flags,
+            None,
+        )
+        .unwrap()
+        .collect();
+        assert_eq!(received.len(), 1);
+        assert!(
+            !received[0].flags.contains(MsgFlags::MSG_CTRUNC),
+            "the control message did not fit: the buffer capacity was not restored"
+        );
+        match received[0].cmsgs().unwrap().next() {
+            Some(ControlMessageOwned::ScmTimestampns(_)) => (),
+            Some(other) => panic!("Unexpected control message {other:?}"),
+            None => panic!("No control message"),
+        }
+    }
+}
+
+// A `MultiHeaders<SockaddrUn>` that has already received a datagram with a
+// short source address must still report the full address of a later datagram
+// whose source address is longer: `msg_namelen` is an in-out parameter of
+// `recvmsg(2)`, so the kernel shrinks it to what it wrote, and `recvmmsg`
+// has to restore the capacity before reusing the header.
+#[cfg_attr(qemu, ignore)]
+#[cfg(target_os = "linux")]
+#[test]
+fn test_recvmmsg_address_after_reuse() {
+    use nix::sys::socket::*;
+    use std::io::{IoSlice, IoSliceMut};
+
+    let message = "Ohayō!".as_bytes();
+    let receiver = socket(
+        AddressFamily::Unix,
+        SockType::Datagram,
+        SockFlag::empty(),
+        None,
+    )
+    .unwrap();
+    let receiver_addr =
+        UnixAddr::new_abstract(b"nix-test-recvmmsg-rx").unwrap();
+    bind(receiver.as_raw_fd(), &receiver_addr).unwrap();
+
+    let short_sender = socket(
+        AddressFamily::Unix,
+        SockType::Datagram,
+        SockFlag::empty(),
+        None,
+    )
+    .unwrap();
+    let short_addr = UnixAddr::new_abstract(b"short").unwrap();
+    bind(short_sender.as_raw_fd(), &short_addr).unwrap();
+
+    let long_sender = socket(
+        AddressFamily::Unix,
+        SockType::Datagram,
+        SockFlag::empty(),
+        None,
+    )
+    .unwrap();
+    let long_addr =
+        UnixAddr::new_abstract(b"nix-test-recvmmsg-long-sender").unwrap();
+    bind(long_sender.as_raw_fd(), &long_addr).unwrap();
+
+    let flags = MsgFlags::empty();
+
+    let mut buffer = vec![0u8; message.len()];
+    let mut data = MultiHeaders::<UnixAddr>::preallocate(1, None);
+
+    // The buffers are borrowed for as long as the results live, so each receive
+    // has to build its own `iov` in its own scope in order to reuse `data`.
+
+    // The first datagram comes from an address much shorter than the address
+    // buffer, so the kernel reports a shrunken `msg_namelen`.
+    {
+        let iov = [IoSlice::new(message)];
+        let sent = sendmsg(
+            short_sender.as_raw_fd(),
+            &iov,
+            &[],
+            flags,
+            Some(&receiver_addr),
+        )
+        .unwrap();
+        assert_eq!(message.len(), sent);
+    }
+    {
+        let mut iov = [[IoSliceMut::new(&mut buffer)]];
+        let received: Vec<RecvMsg<UnixAddr>> = recvmmsg(
+            receiver.as_raw_fd(),
+            &mut data,
+            iov.iter_mut(),
+            flags,
+            None,
+        )
+        .unwrap()
+        .collect();
+        assert_eq!(received.len(), 1);
+        assert_eq!(received[0].address.unwrap(), short_addr);
+    }
+
+    // The second one carries a longer address. Reusing the same headers must
+    // not truncate it to the length reported by the first receive.
+    {
+        let iov = [IoSlice::new(message)];
+        let sent = sendmsg(
+            long_sender.as_raw_fd(),
+            &iov,
+            &[],
+            flags,
+            Some(&receiver_addr),
+        )
+        .unwrap();
+        assert_eq!(message.len(), sent);
+    }
+    {
+        let mut iov = [[IoSliceMut::new(&mut buffer)]];
+        let received: Vec<RecvMsg<UnixAddr>> = recvmmsg(
+            receiver.as_raw_fd(),
+            &mut data,
+            iov.iter_mut(),
+            flags,
+            None,
+        )
+        .unwrap()
+        .collect();
+        assert_eq!(received.len(), 1);
+        assert_eq!(received[0].address.unwrap(), long_addr);
+        assert!(
+            !received[0].flags.contains(MsgFlags::MSG_TRUNC),
+            "the source address did not fit: msg_namelen was not restored"
+        );
+    }
+}
+
 // Disable the test on emulated platforms because it fails in Cirrus-CI.  Lack
 // of QEMU support is suspected.
 #[cfg_attr(qemu, ignore)]
